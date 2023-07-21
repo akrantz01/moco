@@ -50,14 +50,14 @@ pub struct Args {
     )]
     ignored: Vec<String>,
 
-    /// The number of posts to pull from each instance
+    /// The number of posts to pull from each community
     #[arg(long, default_value_t = 50, env = "POST_COUNT")]
     pub post_count: i64,
     /// The number of communities to pull from each instance
     #[arg(long, default_value_t = 25, env = "COMMUNITY_COUNT")]
     pub community_count: i64,
 
-    /// The method(s) to sort communities by to find posts
+    /// A comma-separated list of the methods to sort communities by to find posts
     #[arg(
         long,
         default_value = "top-all,top-day",

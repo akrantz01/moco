@@ -127,3 +127,6 @@ target/
 
 # Ignore code-workspaces
 *.code-workspace
+
+### Project files ###
+.env
