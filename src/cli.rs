@@ -1,5 +1,6 @@
 use clap::Parser;
 use std::time::Duration;
+use url::Url;
 
 mod parsers;
 
@@ -16,7 +17,7 @@ pub struct Args {
     ///
     /// This can be the URL of the API container or the public URL with the `/api` prefix
     #[arg(long, default_value = "http://127.0.0.1:8536", env = "API_URL")]
-    pub api_url: String,
+    pub api_url: Url,
 
     /// The user to act as on your instance
     #[arg(
@@ -38,7 +39,7 @@ pub struct Args {
         long,
         env = "PEERS",
         value_delimiter = ',',
-        value_parser = parsers::string(),
+        value_parser = parsers::domain(),
     )]
     peers: Vec<String>,
     /// Comma-separated list of domains to ignore posts from
@@ -46,7 +47,7 @@ pub struct Args {
         long,
         env = "IGNORED",
         value_delimiter = ',',
-        value_parser = parsers::string(), env = "IGNORED",
+        value_parser = parsers::domain(), env = "IGNORED",
     )]
     ignored: Vec<String>,
 

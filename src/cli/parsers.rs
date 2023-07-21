@@ -1,10 +1,10 @@
-use clap::error::{ContextKind, ContextValue};
 use clap::{
-    builder::{NonEmptyStringValueParser, TypedValueParser},
-    error::ErrorKind,
+    builder::{NonEmptyStringValueParser, StyledStr, TypedValueParser},
+    error::{ContextKind, ContextValue, ErrorKind},
     Arg, Command, Error,
 };
 use std::{ffi::OsStr, time::Duration};
+use url::Host;
 
 /// Parse as a non-empty string
 pub fn string() -> NonEmptyStringValueParser {
@@ -14,6 +14,11 @@ pub fn string() -> NonEmptyStringValueParser {
 /// Parse a duration with support for hours (h), minutes (m), and seconds (s) suffixes
 pub fn duration() -> DurationValueParser {
     DurationValueParser::default()
+}
+
+/// Parse a domain
+pub fn domain() -> DomainValueParser {
+    DomainValueParser::default()
 }
 
 #[derive(Clone, Debug, Default)]
@@ -58,18 +63,12 @@ impl TypedValueParser for DurationValueParser {
                         continue 'outer;
                     }
                     _ => {
-                        let arg = arg
-                            .map(|a| a.to_string())
-                            .unwrap_or_else(|| "...".to_owned());
-
-                        let mut error = Error::new(ErrorKind::ValueValidation).with_cmd(cmd);
-                        error.insert(ContextKind::InvalidArg, ContextValue::String(arg));
-                        error.insert(ContextKind::InvalidValue, ContextValue::String(raw));
-                        error.insert(
-                            ContextKind::ValidValue,
-                            ContextValue::Strings(vec![String::new()]),
-                        );
-                        return Err(error);
+                        return Err(validation_error(
+                            cmd,
+                            arg,
+                            raw,
+                            format!("unknown unit {c:?} — valid units are 'h', 'm', and 's'"),
+                        ));
                     }
                 }
             }
@@ -80,4 +79,53 @@ impl TypedValueParser for DurationValueParser {
 
         Ok(Duration::from_secs(seconds))
     }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct DomainValueParser {
+    inner: NonEmptyStringValueParser,
+}
+
+impl TypedValueParser for DomainValueParser {
+    type Value = String;
+
+    fn parse_ref(
+        &self,
+        cmd: &Command,
+        arg: Option<&Arg>,
+        value: &OsStr,
+    ) -> Result<Self::Value, Error> {
+        let raw = self.inner.parse_ref(cmd, arg, value)?;
+
+        let host = Host::parse(&raw).map_err(|e| validation_error(cmd, arg, raw.clone(), e))?;
+        match host {
+            Host::Domain(d) => Ok(d),
+            Host::Ipv4(_) | Host::Ipv6(_) => Err(validation_error(
+                cmd,
+                arg,
+                raw,
+                "IP addresses cannot be used for Lemmy servers",
+            )),
+        }
+    }
+}
+
+fn validation_error(
+    cmd: &Command,
+    arg: Option<&Arg>,
+    value: String,
+    message: impl std::fmt::Display,
+) -> Error {
+    let arg = arg
+        .map(|a| a.to_string())
+        .unwrap_or_else(|| "...".to_owned());
+
+    let mut error = Error::new(ErrorKind::ValueValidation).with_cmd(cmd);
+    error.insert(ContextKind::InvalidArg, ContextValue::String(arg));
+    error.insert(ContextKind::InvalidValue, ContextValue::String(value));
+
+    let message = StyledStr::from(format!("  reason: {message}"));
+    error.insert(ContextKind::Usage, ContextValue::StyledStr(message));
+
+    error
 }
