@@ -10,7 +10,7 @@ mod errors;
 mod http;
 mod types;
 
-pub use errors::{CommunityError, ConnectError, LoginError, PostError, ResolveError};
+pub use errors::{ConnectError, FetchError, LoginError};
 use http::{
     CommunityResponse, FollowCommunity, GetCommunity, GetPosts, GetPostsResponse, ListCommunities,
     ListCommunitiesResponse, Login, LoginResponse, NodeInfoResponse, ResolveObject,
@@ -95,7 +95,7 @@ impl LemmyApi {
     }
 
     /// Follow / subscribe to a community
-    pub async fn follow_community(&self, id: i32) -> Result<(), CommunityError> {
+    pub async fn follow_community(&self, id: i32) -> Result<(), FetchError> {
         let payload = FollowCommunity {
             community_id: id,
             follow: true,
@@ -106,15 +106,15 @@ impl LemmyApi {
         if response.status().is_success() {
             Ok(())
         } else if response.status() == StatusCode::NOT_FOUND {
-            Err(CommunityError::NotFound)
+            Err(FetchError::NotFound)
         } else {
             let error = response.json().await?;
-            Err(CommunityError::ServerError(error))
+            Err(FetchError::ServerError(error))
         }
     }
 
     /// Get / fetch a community
-    pub async fn get_community(&self, id: i32) -> Result<CommunityResponse, CommunityError> {
+    pub async fn get_community(&self, id: i32) -> Result<CommunityResponse, FetchError> {
         let response = self.get("community", GetCommunity { id }).await?;
 
         if response.status().is_success() {
@@ -123,8 +123,8 @@ impl LemmyApi {
         } else {
             let error = response.json::<ServerError>().await?;
             match error.error.as_str() {
-                "couldnt_find_community" => Err(CommunityError::NotFound),
-                _ => Err(CommunityError::ServerError(error)),
+                "couldnt_find_community" => Err(FetchError::NotFound),
+                _ => Err(FetchError::ServerError(error)),
             }
         }
     }
@@ -136,7 +136,7 @@ impl LemmyApi {
         sort: SortType,
         community_id: Option<i32>,
         limit: i32,
-    ) -> Result<Vec<PostView>, PostError> {
+    ) -> Result<Vec<PostView>, FetchError> {
         let payload = GetPosts {
             type_,
             sort,
@@ -151,7 +151,7 @@ impl LemmyApi {
             Ok(posts_response.posts)
         } else {
             let error = response.json().await?;
-            Err(PostError::ServerError(error))
+            Err(FetchError::ServerError(error))
         }
     }
 
@@ -162,7 +162,7 @@ impl LemmyApi {
         sort: SortType,
         show_nsfw: bool,
         limit: i32,
-    ) -> Result<Vec<CommunityView>, CommunityError> {
+    ) -> Result<Vec<CommunityView>, FetchError> {
         let payload = ListCommunities {
             type_,
             sort,
@@ -177,12 +177,12 @@ impl LemmyApi {
             Ok(communities_response.communities)
         } else {
             let error = response.json().await?;
-            Err(CommunityError::ServerError(error))
+            Err(FetchError::ServerError(error))
         }
     }
 
     /// Fetch a non-local / federated object
-    pub async fn resolve_object(&self, q: &str) -> Result<Option<CommunityView>, ResolveError> {
+    pub async fn resolve_object(&self, q: &str) -> Result<Option<CommunityView>, FetchError> {
         let response = self.get("resolve_object", ResolveObject { q }).await?;
 
         if response.status().is_success() {
@@ -191,9 +191,8 @@ impl LemmyApi {
         } else {
             let error = response.json::<ServerError>().await?;
             match error.error.as_str() {
-                "invalid_query" => Err(ResolveError::InvalidQuery),
-                "couldnt_find_object" => Err(ResolveError::NotFound),
-                _ => Err(ResolveError::ServerError(error)),
+                "couldnt_find_object" => Err(FetchError::NotFound),
+                _ => Err(FetchError::ServerError(error)),
             }
         }
     }

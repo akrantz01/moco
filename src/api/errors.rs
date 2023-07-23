@@ -59,12 +59,6 @@ macro_rules! error {
 }
 
 error!(
-    CommunityError
-        /// The requested community couldn't be found
-        NotFound => "community not found",
-);
-
-error!(
     ConnectError
         /// Federation is not supported on this instance
         FederationNotSupported => "federation not supported on this instance",
@@ -80,12 +74,8 @@ error!(
         EmailNotVerified => "user's email not verified",
 );
 
-error!(PostError);
-
 error!(
-    ResolveError
-        /// The query format is invalid
-        InvalidQuery => "invalid query format",
+    FetchError
         /// The requested object couldn't be found
-        NotFound => "object not found",
+        NotFound => "not found",
 );
