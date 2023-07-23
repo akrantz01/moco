@@ -46,7 +46,7 @@ impl TypedValueParser for DurationValueParser {
         let mut seconds = 0u64;
         'outer: loop {
             let mut n = 0u64;
-            while let Some(c) = chars.next() {
+            for c in &mut chars {
                 match c {
                     '0'..='9' => n = n * 10 + (c as u64 - '0' as u64),
                     c if c.is_whitespace() => {}
