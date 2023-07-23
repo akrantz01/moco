@@ -1,7 +1,9 @@
 use reqwest::{
     header::{self, HeaderMap, HeaderValue},
-    Client, StatusCode,
+    Client, Response, StatusCode,
 };
+use serde::Serialize;
+use std::sync::Arc;
 use url::Url;
 
 mod errors;
@@ -22,9 +24,14 @@ pub use types::{
 const USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
 
 /// A wrapper around the Lemmy API
+#[derive(Clone)]
 pub struct LemmyApi {
-    base: Url,
     client: Client,
+    config: Arc<ApiConfig>,
+}
+
+struct ApiConfig {
+    base: Url,
     token: Option<String>,
 }
 
@@ -58,57 +65,43 @@ impl LemmyApi {
 
         Ok(LemmyApi {
             client,
-            base,
-            token: None,
+            config: Arc::new(ApiConfig { base, token: None }),
         })
     }
 
     /// Authenticate with the instance
     pub async fn login(&mut self, username: &str, password: &str) -> Result<(), LoginError> {
-        let url = self.base.join("user/login").expect("url must be valid");
         let response = self
-            .client
-            .post(url)
-            .json(&Login { username, password })
-            .send()
+            .post("user/login", Login { username, password })
             .await?;
 
         if response.status().is_success() {
             let auth = response.json::<LoginResponse>().await?;
-            match auth.jwt {
-                Some(token) => self.token = Some(token),
-                None => return Err(LoginError::IncorrectCredentials),
-            }
+            let token = auth.jwt.ok_or(LoginError::IncorrectCredentials)?;
+
+            let config = Arc::get_mut(&mut self.config).expect("login must occur before cloning");
+            config.token = Some(token);
+
+            Ok(())
         } else {
             let error = response.json::<ServerError>().await?;
 
-            return match error.error.as_str() {
+            match error.error.as_str() {
                 "incorrect_login" => Err(LoginError::IncorrectCredentials),
                 "email_not_verified" => Err(LoginError::EmailNotVerified),
                 _ => Err(LoginError::ServerError(error)),
-            };
+            }
         }
-
-        Ok(())
     }
 
     /// Follow / subscribe to a community
     pub async fn follow_community(&self, id: i32) -> Result<(), CommunityError> {
-        let url = self
-            .base
-            .join("community/follow")
-            .expect("url must be valid");
         let payload = FollowCommunity {
             community_id: id,
             follow: true,
         };
 
-        let response = self
-            .client
-            .post(url)
-            .json(&WithAuth::new(payload, &self.token))
-            .send()
-            .await?;
+        let response = self.post("community/follow", payload).await?;
 
         if response.status().is_success() {
             Ok(())
@@ -122,13 +115,7 @@ impl LemmyApi {
 
     /// Get / fetch a community
     pub async fn get_community(&self, id: i32) -> Result<CommunityResponse, CommunityError> {
-        let url = self.base.join("community").expect("url must be valid");
-        let response = self
-            .client
-            .get(url)
-            .query(&WithAuth::new(GetCommunity { id }, &self.token))
-            .send()
-            .await?;
+        let response = self.get("community", GetCommunity { id }).await?;
 
         if response.status().is_success() {
             let community = response.json().await?;
@@ -150,7 +137,6 @@ impl LemmyApi {
         community_id: Option<i32>,
         limit: i32,
     ) -> Result<Vec<PostView>, PostError> {
-        let url = self.base.join("post/list").expect("url must be valid");
         let payload = GetPosts {
             type_,
             sort,
@@ -158,13 +144,7 @@ impl LemmyApi {
             page: 1,
             limit,
         };
-
-        let response = self
-            .client
-            .get(url)
-            .query(&WithAuth::new(payload, &self.token))
-            .send()
-            .await?;
+        let response = self.get("post/list", payload).await?;
 
         if response.status().is_success() {
             let posts_response = response.json::<GetPostsResponse>().await?;
@@ -183,7 +163,6 @@ impl LemmyApi {
         show_nsfw: bool,
         limit: i32,
     ) -> Result<Vec<CommunityView>, CommunityError> {
-        let url = self.base.join("community/list").expect("url must be valid");
         let payload = ListCommunities {
             type_,
             sort,
@@ -191,13 +170,7 @@ impl LemmyApi {
             page: 1,
             limit,
         };
-
-        let response = self
-            .client
-            .get(url)
-            .query(&WithAuth::new(payload, &self.token))
-            .send()
-            .await?;
+        let response = self.get("community/list", payload).await?;
 
         if response.status().is_success() {
             let communities_response = response.json::<ListCommunitiesResponse>().await?;
@@ -210,14 +183,7 @@ impl LemmyApi {
 
     /// Fetch a non-local / federated object
     pub async fn resolve_object(&self, q: &str) -> Result<Option<CommunityView>, ResolveError> {
-        let url = self.base.join("resolve_object").expect("url must be valid");
-
-        let response = self
-            .client
-            .get(url)
-            .query(&WithAuth::new(ResolveObject { q }, &self.token))
-            .send()
-            .await?;
+        let response = self.get("resolve_object", ResolveObject { q }).await?;
 
         if response.status().is_success() {
             let resolved = response.json::<ResolveObjectResponse>().await?;
@@ -230,6 +196,35 @@ impl LemmyApi {
                 _ => Err(ResolveError::ServerError(error)),
             }
         }
+    }
+
+    /// Construct a URL from the base
+    fn url(&self, path: &str) -> Url {
+        self.config.base.join(path).expect("url must be valid")
+    }
+
+    /// Send a GET request
+    async fn get<T: Serialize>(&self, path: &str, query: T) -> Result<Response, reqwest::Error> {
+        self.client
+            .get(self.url(path))
+            .query(&WithAuth {
+                payload: query,
+                auth: self.config.token.as_deref(),
+            })
+            .send()
+            .await
+    }
+
+    /// Send a POST request
+    async fn post<T: Serialize>(&self, path: &str, payload: T) -> Result<Response, reqwest::Error> {
+        self.client
+            .post(self.url(path))
+            .json(&WithAuth {
+                payload,
+                auth: self.config.token.as_deref(),
+            })
+            .send()
+            .await
     }
 }
 

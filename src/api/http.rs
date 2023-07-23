@@ -5,19 +5,9 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize)]
 pub(crate) struct WithAuth<'a, T> {
     #[serde(flatten)]
-    payload: T,
+    pub payload: T,
     #[serde(skip_serializing_if = "Option::is_none")]
-    auth: Option<&'a str>,
-}
-
-impl<'a, T> WithAuth<'a, T> {
-    /// Construct an authenticated payload
-    pub fn new(payload: T, auth: &'a Option<String>) -> WithAuth<'a, T> {
-        WithAuth {
-            payload,
-            auth: auth.as_deref(),
-        }
-    }
+    pub auth: Option<&'a str>,
 }
 
 /// A simple community response
