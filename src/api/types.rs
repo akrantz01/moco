@@ -1,3 +1,4 @@
+use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
@@ -88,7 +89,7 @@ pub struct ServerError {
 }
 
 /// The post sort types
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, ValueEnum)]
 pub enum SortType {
     /// Calculates a rank based on the score and time of the latest comment, with decay over time
     Active,

@@ -1,3 +1,4 @@
+use crate::api::SortType;
 use clap::Parser;
 use std::time::Duration;
 use url::Url;
@@ -53,10 +54,10 @@ pub struct Args {
 
     /// The number of posts to pull from each community
     #[arg(long, default_value_t = 50, env = "POST_COUNT")]
-    pub post_count: i64,
+    pub post_count: i32,
     /// The number of communities to pull from each instance
     #[arg(long, default_value_t = 25, env = "COMMUNITY_COUNT")]
-    pub community_count: i64,
+    pub community_count: i32,
 
     /// A comma-separated list of the methods to sort communities by to find posts
     #[arg(
@@ -64,9 +65,9 @@ pub struct Args {
         default_value = "top-all,top-day",
         env = "SORT_METHODS",
         value_delimiter = ',',
-        value_parser = parsers::string(),
+        value_enum
     )]
-    pub sort_methods: Vec<String>,
+    pub sort_methods: Vec<SortType>,
 
     /// How long to wait after subscribing to a community
     ///
