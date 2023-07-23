@@ -41,7 +41,7 @@ pub struct Args {
         value_delimiter = ',',
         value_parser = parsers::domain(),
     )]
-    peers: Vec<String>,
+    pub peers: Vec<String>,
     /// Comma-separated list of domains to ignore posts from
     #[arg(
         long,
@@ -49,7 +49,7 @@ pub struct Args {
         value_delimiter = ',',
         value_parser = parsers::domain(), env = "IGNORED",
     )]
-    ignored: Vec<String>,
+    pub ignored: Vec<String>,
 
     /// The number of posts to pull from each community
     #[arg(long, default_value_t = 50, env = "POST_COUNT")]
