@@ -116,8 +116,8 @@ impl LemmyApi {
     }
 
     /// Get / fetch a community
-    pub async fn get_community(&self, id: i32) -> Result<CommunityResponse, FetchError> {
-        let response = self.get("community", GetCommunity { id }).await?;
+    pub async fn get_community(&self, name: &str) -> Result<CommunityResponse, FetchError> {
+        let response = self.get("community", GetCommunity { name }).await?;
 
         if response.status().is_success() {
             let community = response.json().await?;

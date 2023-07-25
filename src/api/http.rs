@@ -26,8 +26,8 @@ pub struct FollowCommunity {
 
 /// Get a community. Must provide either an id or a name
 #[derive(Debug, Serialize)]
-pub struct GetCommunity {
-    pub id: i32,
+pub struct GetCommunity<'n> {
+    pub name: &'n str,
 }
 
 /// Get a list of posts
