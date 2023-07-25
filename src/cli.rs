@@ -1,6 +1,7 @@
 use crate::api::SortType;
 use clap::Parser;
 use std::time::Duration;
+use tracing::Level;
 use url::Url;
 
 mod parsers;
@@ -93,4 +94,21 @@ pub struct Args {
         value_parser = parsers::duration(),
     )]
     pub run_interval: Duration,
+
+    /// The default level to emit logs at
+    ///
+    /// Can be overriden for individual components with `--log-targets` or the `LOG_TARGETS`
+    /// environment variable.
+    #[arg(
+        long,
+        default_value_t = Level::INFO,
+        env = "LOG_LEVEL",
+    )]
+    pub log_level: Level,
+
+    /// Override the default log level for individual components
+    ///
+    /// Filter input format: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives
+    #[arg(long, env = "LOG_TARGETS")]
+    pub log_targets: Option<String>,
 }

@@ -1,10 +1,12 @@
 use eyre::WrapErr;
 use std::{collections::HashSet, sync::Arc};
 use tokio::{signal, sync::broadcast};
+use tracing::{debug, info};
 use url::Url;
 
 mod api;
 mod cli;
+mod logging;
 mod populater;
 
 use api::LemmyApi;
@@ -23,13 +25,19 @@ async fn main() -> eyre::Result<()> {
     let args = cli::parse();
     let ignored = Arc::new(args.ignored.clone().into_iter().collect::<HashSet<_>>());
 
+    logging::init(args.log_level, args.log_targets.as_deref());
+
     let mut client = LemmyApi::connect(&args.api_url)
         .await
         .wrap_err("connection to instance failed")?;
+    debug!(instance = %args.api_url, "connected to the local instance");
+
     client
         .login(&args.username, &args.password)
         .await
         .wrap_err("login failed")?;
+
+    info!(instance = %args.api_url, "successfully logged in");
 
     let (stop, _) = broadcast::channel(1);
 
@@ -74,11 +82,11 @@ async fn main() -> eyre::Result<()> {
 
     stop.send(()).wrap_err("populaters stopped unexpectedly")?;
 
-    println!("waiting for populaters to exit...");
+    info!("waiting for populaters to exit...");
     futures::future::join_all(tasks).await;
 
-    println!("successfully shutdown");
-    println!("goodbye o/");
+    info!("successfully shutdown");
+    info!("goodbye o/");
 
     Ok(())
 }
