@@ -1,6 +1,6 @@
 use reqwest::{
     header::{self, HeaderMap, HeaderValue},
-    Certificate, Client, Response, StatusCode,
+    Certificate, Client, Response,
 };
 use serde::Serialize;
 use std::sync::Arc;
@@ -107,8 +107,6 @@ impl LemmyApi {
 
         if response.status().is_success() {
             Ok(())
-        } else if response.status() == StatusCode::NOT_FOUND {
-            Err(FetchError::NotFound)
         } else {
             let error = response.json().await?;
             Err(FetchError::ServerError(error))
@@ -116,16 +114,16 @@ impl LemmyApi {
     }
 
     /// Get / fetch a community
-    pub async fn get_community(&self, name: &str) -> Result<CommunityResponse, FetchError> {
+    pub async fn get_community(&self, name: &str) -> Result<Option<CommunityResponse>, FetchError> {
         let response = self.get("community", GetCommunity { name }).await?;
 
         if response.status().is_success() {
             let community = response.json().await?;
-            Ok(community)
+            Ok(Some(community))
         } else {
             let error = response.json::<ServerError>().await?;
             match error.error.as_str() {
-                "couldnt_find_community" => Err(FetchError::NotFound),
+                "couldnt_find_community" => Ok(None),
                 _ => Err(FetchError::ServerError(error)),
             }
         }
@@ -193,7 +191,7 @@ impl LemmyApi {
         } else {
             let error = response.json::<ServerError>().await?;
             match error.error.as_str() {
-                "couldnt_find_object" => Err(FetchError::NotFound),
+                "couldnt_find_object" => Ok(None),
                 _ => Err(FetchError::ServerError(error)),
             }
         }

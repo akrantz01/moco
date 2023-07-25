@@ -127,8 +127,4 @@ error!(
         EmailNotVerified => "user's email not verified",
 );
 
-error!(
-    FetchError
-        /// The requested object couldn't be found
-        NotFound => "not found",
-);
+error!(FetchError);
