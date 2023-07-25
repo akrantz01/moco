@@ -1,10 +1,14 @@
 use eyre::WrapErr;
-use tokio::signal;
+use std::{collections::HashSet, sync::Arc};
+use tokio::{signal, sync::broadcast};
+use url::Url;
 
 mod api;
 mod cli;
+mod populater;
 
 use api::LemmyApi;
+use populater::{FromCommunities, FromPosts};
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
@@ -17,6 +21,7 @@ async fn main() -> eyre::Result<()> {
     }
 
     let args = cli::parse();
+    let ignored = Arc::new(args.ignored.clone().into_iter().collect::<HashSet<_>>());
 
     let mut client = LemmyApi::connect(&args.api_url)
         .await
@@ -26,7 +31,54 @@ async fn main() -> eyre::Result<()> {
         .await
         .wrap_err("login failed")?;
 
+    let (stop, _) = broadcast::channel(1);
+
+    let mut tasks = Vec::with_capacity(args.peers.len() * args.sort_methods.len());
+    for peer in args.peers {
+        let url = Url::parse(&format!("https://{peer}"))
+            .wrap_err_with(|| format!("could not build URL for {peer}"))?;
+
+        let peer = LemmyApi::connect(&url)
+            .await
+            .wrap_err_with(|| format!("cannot connect to peer {peer}"))?;
+
+        for method in &args.sort_methods {
+            let communities = tokio::task::spawn(populater::launch::<FromCommunities>(
+                client.clone(),
+                peer.clone(),
+                ignored.clone(),
+                *method,
+                args.community_count,
+                args.community_add_delay,
+                args.run_interval,
+                stop.subscribe(),
+            ));
+
+            let posts = tokio::task::spawn(populater::launch::<FromPosts>(
+                client.clone(),
+                peer.clone(),
+                ignored.clone(),
+                *method,
+                args.post_count,
+                args.community_add_delay,
+                args.run_interval,
+                stop.subscribe(),
+            ));
+
+            tasks.push(communities);
+            tasks.push(posts);
+        }
+    }
+
     wait_for_terminate().await;
+
+    stop.send(()).wrap_err("populaters stopped unexpectedly")?;
+
+    println!("waiting for populaters to exit...");
+    futures::future::join_all(tasks).await;
+
+    println!("successfully shutdown");
+    println!("goodbye o/");
 
     Ok(())
 }
