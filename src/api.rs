@@ -238,8 +238,8 @@ fn new_client() -> Result<Client, ConnectError> {
         .user_agent(USER_AGENT)
         .default_headers(headers);
 
-    if let Some(paths) = env::var("EXTRA_CERTIFICATE_PATHS").ok() {
-        for path in paths.split(",") {
+    if let Ok(paths) = env::var("EXTRA_CERTIFICATE_PATHS") {
+        for path in paths.split(',') {
             let contents = fs::read(path)?;
             let certificate =
                 Certificate::from_pem(&contents).map_err(ConnectError::InvalidCertificate)?;
