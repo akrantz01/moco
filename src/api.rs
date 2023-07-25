@@ -1,9 +1,10 @@
 use reqwest::{
     header::{self, HeaderMap, HeaderValue},
-    Client, Response, StatusCode,
+    Certificate, Client, Response, StatusCode,
 };
 use serde::Serialize;
 use std::sync::Arc;
+use std::{env, fs};
 use url::Url;
 
 mod errors;
@@ -38,14 +39,7 @@ struct ApiConfig {
 impl LemmyApi {
     /// Connect to a Lemmy instance
     pub async fn connect(base: &Url) -> Result<LemmyApi, ConnectError> {
-        let client = Client::builder()
-            .user_agent(USER_AGENT)
-            .default_headers({
-                let mut map = HeaderMap::new();
-                map.insert(header::ACCEPT, HeaderValue::from_static("application/json"));
-                map
-            })
-            .build()?;
+        let client = new_client()?;
 
         let info = node_info(&client, base).await?;
         if info.version != "2.0" || info.software.name != "lemmy" {
@@ -67,6 +61,14 @@ impl LemmyApi {
             client,
             config: Arc::new(ApiConfig { base, token: None }),
         })
+    }
+
+    /// Get the instance name
+    pub fn instance(&self) -> &str {
+        self.config
+            .base
+            .host_str()
+            .expect("api client must have a host")
     }
 
     /// Authenticate with the instance
@@ -227,16 +229,34 @@ impl LemmyApi {
     }
 }
 
+/// Construct a new HTTP client
+fn new_client() -> Result<Client, ConnectError> {
+    let mut headers = HeaderMap::new();
+    headers.insert(header::ACCEPT, HeaderValue::from_static("application/json"));
+
+    let mut builder = Client::builder()
+        .user_agent(USER_AGENT)
+        .default_headers(headers);
+
+    if let Some(paths) = env::var("EXTRA_CERTIFICATE_PATHS").ok() {
+        for path in paths.split(",") {
+            let contents = fs::read(path)?;
+            let certificate =
+                Certificate::from_pem(&contents).map_err(ConnectError::InvalidCertificate)?;
+            builder = builder.add_root_certificate(certificate);
+        }
+    }
+
+    Ok(builder.build()?)
+}
+
 /// Fetch information about the instance
 async fn node_info(client: &Client, url: &Url) -> Result<NodeInfoResponse, ConnectError> {
     let url = url.join("/nodeinfo/2.0.json").expect("url must be valid");
     let response = client.get(url).send().await?.error_for_status()?;
 
-    if response.status().is_success() {
-        let info = response.json().await?;
-        Ok(info)
-    } else {
-        let error = response.json().await?;
-        Err(ConnectError::ServerError(error))
-    }
+    let body = response.text().await?;
+    let info = serde_json::from_str(&body).map_err(|_| ConnectError::NotLemmyInstance)?;
+
+    Ok(info)
 }

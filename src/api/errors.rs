@@ -1,5 +1,8 @@
 use super::types::ServerError;
-use std::fmt::{self, Formatter};
+use std::{
+    fmt::{self, Formatter},
+    io,
+};
 
 macro_rules! error {
     (
@@ -58,13 +61,63 @@ macro_rules! error {
     };
 }
 
-error!(
-    ConnectError
-        /// Federation is not supported on this instance
-        FederationNotSupported => "federation not supported on this instance",
-        /// The server is not a Lemmy instance
-        NotLemmyInstance => "the requested URL does not resolve to a Lemmy instance",
-);
+/// Errors that can occur when initiating the connection to the Lemmy instance
+#[derive(Debug)]
+pub enum ConnectError {
+    /// Federation is not supported on this instance
+    FederationNotSupported,
+    /// The server is not a Lemmy instance
+    NotLemmyInstance,
+    /// An error that occurred while processing the request
+    Request(reqwest::Error),
+    /// Invalid additional certificate
+    ///
+    /// Only returned if a certificate from the `EXTRA_CERTIFICATE_PATHS` environment variable is
+    /// invalid
+    InvalidCertificate(reqwest::Error),
+    /// Could not read the custom certificate
+    ///
+    /// Only returned if a path in the `EXTRA_CERTIFICATE_PATHS` environment variable could not be
+    /// read
+    CertificateRead(io::Error),
+}
+
+impl std::error::Error for ConnectError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Request(err) => Some(err),
+            Self::InvalidCertificate(err) => Some(err),
+            Self::CertificateRead(err) => Some(err),
+            _ => None,
+        }
+    }
+}
+
+impl fmt::Display for ConnectError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::FederationNotSupported => write!(f, "federation not supported on this instance"),
+            Self::NotLemmyInstance => {
+                write!(f, "the requested URL does not resolve to a Lemmy instance")
+            }
+            Self::Request(_) => write!(f, "failed to complete the request"),
+            Self::InvalidCertificate(_) => write!(f, "invalid extra certificate"),
+            Self::CertificateRead(_) => write!(f, "could not read extra certificate path"),
+        }
+    }
+}
+
+impl From<reqwest::Error> for ConnectError {
+    fn from(err: reqwest::Error) -> ConnectError {
+        Self::Request(err)
+    }
+}
+
+impl From<io::Error> for ConnectError {
+    fn from(err: io::Error) -> ConnectError {
+        Self::CertificateRead(err)
+    }
+}
 
 error!(
     LoginError
