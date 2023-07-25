@@ -3,8 +3,7 @@ use reqwest::{
     Certificate, Client, Response,
 };
 use serde::Serialize;
-use std::sync::Arc;
-use std::{env, fs};
+use std::{env, fs, sync::Arc};
 use url::Url;
 
 mod errors;
