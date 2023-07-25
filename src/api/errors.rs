@@ -54,7 +54,6 @@ macro_rules! error {
 
         impl From<reqwest::Error> for $name {
             fn from(err: reqwest::Error) -> Self {
-                // TODO: separate out certain errors
                 Self::Request(err)
             }
         }
