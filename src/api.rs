@@ -3,7 +3,8 @@ use reqwest::{
     Certificate, Client, Response,
 };
 use serde::Serialize;
-use std::{env, fs, sync::Arc};
+use std::{env, fmt::Debug, fs, sync::Arc};
+use tracing::instrument;
 use url::Url;
 
 mod errors;
@@ -37,6 +38,7 @@ struct ApiConfig {
 
 impl LemmyApi {
     /// Connect to a Lemmy instance
+    #[instrument(name = "LemmyApi::connect", fields(%base))]
     pub async fn connect(base: &Url) -> Result<LemmyApi, ConnectError> {
         let client = new_client()?;
 
@@ -71,6 +73,11 @@ impl LemmyApi {
     }
 
     /// Authenticate with the instance
+    #[instrument(
+        name = "LemmyApi::login",
+        skip(self, password),
+        fields(base_url = %self.config.base),
+    )]
     pub async fn login(&mut self, username: &str, password: &str) -> Result<(), LoginError> {
         let response = self
             .post("user/login", Login { username, password })
@@ -96,6 +103,11 @@ impl LemmyApi {
     }
 
     /// Follow / subscribe to a community
+    #[instrument(
+        name = "LemmyApi::follow_community",
+        skip(self),
+        fields(base_url = %self.config.base),
+    )]
     pub async fn follow_community(&self, id: i32) -> Result<(), FetchError> {
         let payload = FollowCommunity {
             community_id: id,
@@ -113,6 +125,11 @@ impl LemmyApi {
     }
 
     /// Get / fetch a community
+    #[instrument(
+        name = "LemmyApi::get_community",
+        skip(self),
+        fields(base_url = %self.config.base),
+    )]
     pub async fn get_community(&self, name: &str) -> Result<Option<CommunityResponse>, FetchError> {
         let response = self.get("community", GetCommunity { name }).await?;
 
@@ -129,6 +146,11 @@ impl LemmyApi {
     }
 
     /// Get / fetch posts, with various filters
+    #[instrument(
+        name = "LemmyApi::get_posts",
+        skip(self),
+        fields(base_url = %self.config.base),
+    )]
     pub async fn get_posts(
         &self,
         type_: ListingType,
@@ -155,6 +177,11 @@ impl LemmyApi {
     }
 
     /// List communities, with various filters
+    #[instrument(
+        name = "LemmyApi::list_communities",
+        skip(self),
+        fields(base_url = %self.config.base),
+    )]
     pub async fn list_communities(
         &self,
         type_: ListingType,
@@ -181,6 +208,11 @@ impl LemmyApi {
     }
 
     /// Fetch a non-local / federated object
+    #[instrument(
+        name = "LemmyApi::resolve_object",
+        skip(self),
+        fields(base_url = %self.config.base),
+    )]
     pub async fn resolve_object(&self, q: &str) -> Result<Option<CommunityView>, FetchError> {
         let response = self.get("resolve_object", ResolveObject { q }).await?;
 
@@ -202,7 +234,16 @@ impl LemmyApi {
     }
 
     /// Send a GET request
-    async fn get<T: Serialize>(&self, path: &str, query: T) -> Result<Response, reqwest::Error> {
+    #[instrument(
+        level = "debug",
+        name = "LemmyApi::get",
+        skip(self),
+        fields(base_url = %self.config.base),
+    )]
+    async fn get<T>(&self, path: &str, query: T) -> Result<Response, reqwest::Error>
+    where
+        T: Serialize + Debug,
+    {
         self.client
             .get(self.url(path))
             .query(&WithAuth {
@@ -214,7 +255,16 @@ impl LemmyApi {
     }
 
     /// Send a POST request
-    async fn post<T: Serialize>(&self, path: &str, payload: T) -> Result<Response, reqwest::Error> {
+    #[instrument(
+        level = "debug",
+        name = "LemmyApi::post",
+        skip(self),
+        fields(base_url = %self.config.base),
+    )]
+    async fn post<T>(&self, path: &str, payload: T) -> Result<Response, reqwest::Error>
+    where
+        T: Serialize + Debug,
+    {
         self.client
             .post(self.url(path))
             .json(&WithAuth {
@@ -248,6 +298,7 @@ fn new_client() -> Result<Client, ConnectError> {
 }
 
 /// Fetch information about the instance
+#[instrument(name = "LemmyApi::node_info", skip(client), fields(%url))]
 async fn node_info(client: &Client, url: &Url) -> Result<NodeInfoResponse, ConnectError> {
     let url = url.join("/nodeinfo/2.0.json").expect("url must be valid");
     let response = client.get(url).send().await?.error_for_status()?;
