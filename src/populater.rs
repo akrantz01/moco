@@ -1,6 +1,7 @@
 use crate::api::{Community, FetchError, LemmyApi, ListingType, SortType, SubscribedType};
 use std::{collections::HashSet, sync::Arc, time::Duration};
 use tokio::{sync::broadcast, time};
+use tracing::{debug, error, info, info_span, instrument, warn, Instrument, Span};
 
 /// Periodically populate the local instance from the peer using the specified source
 pub async fn launch<S: CommunitySource>(
@@ -16,14 +17,20 @@ pub async fn launch<S: CommunitySource>(
     let instance = peer.instance();
     let kind = S::kind();
 
-    loop {
-        if let Err(error) =
-            populate::<S>(&local, &peer, &ignored, sort, limit, community_add_delay).await
-        {
-            println!("ERROR for {instance} ({kind}, {sort:?}): {error}",);
-        }
+    info!(%instance, %kind, ?sort, "populater started");
 
-        println!("complete, waiting until next interval");
+    loop {
+        async {
+            if let Err(error) =
+                populate::<S>(&local, &peer, &ignored, sort, limit, community_add_delay).await
+            {
+                error!(%instance, %kind, ?sort, error = &error as &(dyn std::error::Error + 'static));
+            }
+
+            info!(%instance, %kind, ?sort, "complete, waiting until next interval");
+        }
+            .instrument(info_span!("populater", %instance, %kind, ?sort))
+            .await;
 
         tokio::select! {
             _ = stop.recv() => break,
@@ -31,64 +38,79 @@ pub async fn launch<S: CommunitySource>(
         }
     }
 
-    println!("{instance} ({kind} {sort:?}) halted");
+    info!(%instance, %kind, ?sort, "populater halted");
 }
 
 /// Perform the population for the peer
+#[instrument(name = "populate", skip_all)]
 async fn populate<S: CommunitySource>(
     local: &LemmyApi,
     peer: &LemmyApi,
     ignored: &HashSet<String>,
     sort: SortType,
     limit: i32,
-    community_add_delay: Duration,
+    add_delay: Duration,
 ) -> Result<(), FetchError> {
-    let mut searched = HashSet::new();
+    let mut processed = HashSet::new();
 
     let communities = S::fetch(peer, ListingType::Local, sort, limit).await?;
-    println!(
-        "fetched {} {} by {sort:?} from {}",
-        communities.len(),
-        S::kind(),
-        peer.instance()
-    );
+    debug!(found = communities.len());
 
     for community in communities {
-        let instance = community
-            .actor_id
-            .host_str()
-            .expect("community must have a host");
-        let unique_id = format!("{}@{instance}", community.name);
-
-        if ignored.contains(instance) {
-            println!("{instance} in ignore list, skipping");
-            continue;
+        if let Err(error) = check(&community, local, peer, ignored, &mut processed, add_delay).await
+        {
+            error!(id = community.id, actor_id = %community.actor_id, error = &error as &(dyn std::error::Error + 'static));
         }
-        if searched.contains(&unique_id) {
-            println!("already processed {unique_id}, skipping");
-            continue;
-        }
-
-        if local.get_community(&unique_id).await?.is_some() {
-            println!("already subscribed to {unique_id}, skipping");
-            continue;
-        }
-
-        let community = match peer.resolve_object(community.actor_id.as_str()).await? {
-            Some(c) => c,
-            None => {
-                println!("{unique_id} does not exist on {instance}");
-                continue;
-            }
-        };
-
-        tokio::time::sleep(community_add_delay).await;
-
-        println!("following {unique_id}");
-        local.follow_community(community.community.id).await?;
-
-        searched.insert(unique_id);
     }
+
+    Ok(())
+}
+
+/// Check the community
+#[instrument(name = "check", skip_all, fields(name))]
+async fn check(
+    community: &Community,
+    local: &LemmyApi,
+    peer: &LemmyApi,
+    ignored: &HashSet<String>,
+    processed: &mut HashSet<String>,
+    add_delay: Duration,
+) -> Result<(), FetchError> {
+    let instance = community
+        .actor_id
+        .host_str()
+        .expect("community must have a host");
+    let name = format!("{}@{instance}", community.name);
+    Span::current().record("name", &name);
+
+    if ignored.contains(instance) {
+        info!(skipped = true, reason = "in ignore list");
+        return Ok(());
+    }
+    if processed.contains(&name) {
+        info!(skipped = true, reason = "already processed community");
+        return Ok(());
+    }
+
+    if local.get_community(&name).await?.is_some() {
+        info!(skipped = true, reason = "already subscribed to community");
+        return Ok(());
+    }
+
+    let community = match peer.resolve_object(community.actor_id.as_str()).await? {
+        Some(c) => c,
+        None => {
+            warn!("community does not exist on instance");
+            return Ok(());
+        }
+    };
+
+    tokio::time::sleep(add_delay).await;
+
+    info!("following new community");
+    local.follow_community(community.community.id).await?;
+
+    processed.insert(name);
 
     Ok(())
 }
