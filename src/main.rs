@@ -52,25 +52,26 @@ async fn main() -> eyre::Result<()> {
             .await
             .wrap_err_with(|| format!("cannot connect to peer {peer}"))?;
 
+        let context = populater::context(
+            client.clone(),
+            peer,
+            ignored.clone(),
+            args.community_add_delay,
+        );
+
         for method in &args.sort_methods {
             let communities = tokio::task::spawn(populater::launch::<FromCommunities>(
-                client.clone(),
-                peer.clone(),
-                ignored.clone(),
+                context.clone(),
                 *method,
                 args.community_count,
-                args.community_add_delay,
                 args.run_interval,
                 stop.subscribe(),
             ));
 
             let posts = tokio::task::spawn(populater::launch::<FromPosts>(
-                client.clone(),
-                peer.clone(),
-                ignored.clone(),
+                context.clone(),
                 *method,
                 args.post_count,
-                args.community_add_delay,
                 args.run_interval,
                 stop.subscribe(),
             ));

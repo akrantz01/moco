@@ -4,18 +4,39 @@ use std::{collections::HashSet, sync::Arc, time::Duration};
 use tokio::{sync::broadcast, time};
 use tracing::{debug, error, info, info_span, instrument, warn, Instrument, Span};
 
-/// Periodically populate the local instance from the peer using the specified source
-pub async fn launch<S: CommunitySource>(
+/// Shared context passed through to the populater
+#[derive(Clone)]
+pub struct Context {
     local: LemmyApi,
     peer: LemmyApi,
     ignored: Arc<HashSet<String>>,
+    add_delay: Duration,
+}
+
+/// Create a new context for the populaters
+pub fn context(
+    local: LemmyApi,
+    peer: LemmyApi,
+    ignored: Arc<HashSet<String>>,
+    add_delay: Duration,
+) -> Context {
+    Context {
+        local,
+        peer,
+        ignored,
+        add_delay,
+    }
+}
+
+/// Periodically populate the local instance from the peer using the specified source
+pub async fn launch<S: CommunitySource>(
+    context: Context,
     sort: SortType,
     limit: i32,
-    community_add_delay: Duration,
     interval: Duration,
     mut stop: broadcast::Receiver<()>,
 ) {
-    let instance = peer.instance();
+    let instance = context.peer.instance();
     let kind = S::kind();
 
     info!(%instance, %kind, ?sort, "populater started");
@@ -25,7 +46,7 @@ pub async fn launch<S: CommunitySource>(
     loop {
         async {
             if let Err(error) =
-                populate::<S>(&local, &peer, &ignored, sort, limit, community_add_delay).await
+                populate::<S>(&context, sort, limit).await
             {
                 error!(%instance, %kind, ?sort, error = &error as &(dyn std::error::Error + 'static));
             }
@@ -47,21 +68,17 @@ pub async fn launch<S: CommunitySource>(
 /// Perform the population for the peer
 #[instrument(name = "populate", skip_all)]
 async fn populate<S: CommunitySource>(
-    local: &LemmyApi,
-    peer: &LemmyApi,
-    ignored: &HashSet<String>,
+    context: &Context,
     sort: SortType,
     limit: i32,
-    add_delay: Duration,
 ) -> Result<(), FetchError> {
     let mut processed = HashSet::new();
 
-    let communities = S::fetch(peer, ListingType::Local, sort, limit).await?;
+    let communities = S::fetch(&context.peer, ListingType::Local, sort, limit).await?;
     debug!(found = communities.len());
 
     for community in communities {
-        if let Err(error) = check(&community, local, peer, ignored, &mut processed, add_delay).await
-        {
+        if let Err(error) = check(&community, &mut processed, context).await {
             error!(id = community.id, actor_id = %community.actor_id, error = &error as &(dyn std::error::Error + 'static));
         }
     }
@@ -73,11 +90,13 @@ async fn populate<S: CommunitySource>(
 #[instrument(name = "check", skip_all, fields(name))]
 async fn check(
     community: &Community,
-    local: &LemmyApi,
-    peer: &LemmyApi,
-    ignored: &HashSet<String>,
     processed: &mut HashSet<String>,
-    add_delay: Duration,
+    Context {
+        local,
+        peer,
+        ignored,
+        add_delay,
+    }: &Context,
 ) -> Result<(), FetchError> {
     let instance = community
         .actor_id
@@ -108,7 +127,7 @@ async fn check(
         }
     };
 
-    sleep_with_jitter(add_delay, 0.25).await;
+    sleep_with_jitter(*add_delay, 0.25).await;
 
     info!("following new community");
     local.follow_community(community.community.id).await?;
