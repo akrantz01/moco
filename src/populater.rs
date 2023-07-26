@@ -1,4 +1,5 @@
 use crate::api::{Community, FetchError, LemmyApi, ListingType, SortType, SubscribedType};
+use rand::Rng;
 use std::{collections::HashSet, sync::Arc, time::Duration};
 use tokio::{sync::broadcast, time};
 use tracing::{debug, error, info, info_span, instrument, warn, Instrument, Span};
@@ -19,6 +20,8 @@ pub async fn launch<S: CommunitySource>(
 
     info!(%instance, %kind, ?sort, "populater started");
 
+    sleep_with_jitter(Duration::from_secs(5), 0.5).await;
+
     loop {
         async {
             if let Err(error) =
@@ -34,7 +37,7 @@ pub async fn launch<S: CommunitySource>(
 
         tokio::select! {
             _ = stop.recv() => break,
-            _ = time::sleep(interval) => {},
+            _ = sleep_with_jitter(interval, 0.1) => {},
         }
     }
 
@@ -105,7 +108,7 @@ async fn check(
         }
     };
 
-    tokio::time::sleep(add_delay).await;
+    sleep_with_jitter(add_delay, 0.25).await;
 
     info!("following new community");
     local.follow_community(community.community.id).await?;
@@ -113,6 +116,23 @@ async fn check(
     processed.insert(name);
 
     Ok(())
+}
+
+/// Sleep the specified amount +/- a 5% jitter
+#[instrument(level = "debug", fields(duration = duration.as_secs()))]
+async fn sleep_with_jitter(duration: Duration, max_percent: f64) {
+    let secs = duration.as_secs_f64();
+
+    let jitter = {
+        let mut rng = rand::thread_rng();
+
+        let sign = if rng.gen() { 1f64 } else { -1f64 };
+        let percent: f64 = rng.gen_range(0f64..max_percent);
+        duration.as_secs_f64() * percent * sign
+    };
+
+    debug!(jitter, total = secs + jitter);
+    time::sleep(Duration::from_secs_f64(secs + jitter)).await
 }
 
 #[async_trait::async_trait]
