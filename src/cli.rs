@@ -19,7 +19,7 @@ pub struct Args {
     ///
     /// This can be the URL of the API container or the public URL with the `/api` prefix
     #[arg(long, default_value = "http://127.0.0.1:8536", env = "API_URL")]
-    pub api_url: Url,
+    pub url: Url,
 
     /// The user to act as on your instance
     #[arg(

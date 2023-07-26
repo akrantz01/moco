@@ -27,17 +27,17 @@ async fn main() -> eyre::Result<()> {
 
     logging::init(args.log_level, args.log_targets.as_deref());
 
-    let mut client = LemmyApi::connect(&args.api_url)
+    let mut client = LemmyApi::connect(&args.url)
         .await
         .wrap_err("connection to instance failed")?;
-    debug!(instance = %args.api_url, "connected to the local instance");
+    debug!(instance = %args.url, "connected to the local instance");
 
     client
         .login(&args.username, &args.password)
         .await
         .wrap_err("login failed")?;
 
-    info!(instance = %args.api_url, "successfully logged in");
+    info!(instance = %args.url, "successfully logged in");
 
     let (stop, _) = broadcast::channel(1);
 
