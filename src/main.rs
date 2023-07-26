@@ -27,6 +27,8 @@ async fn main() -> eyre::Result<()> {
 
     logging::init(args.log_level, args.log_targets.as_deref());
 
+    debug!(?args);
+
     let mut client = LemmyApi::connect(&args.url)
         .await
         .wrap_err("connection to instance failed")?;

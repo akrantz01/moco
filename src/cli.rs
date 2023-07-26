@@ -1,7 +1,10 @@
 use crate::api::SortType;
 use clap::Parser;
-use std::time::Duration;
-use tracing::Level;
+use std::{
+    fmt::{self, Formatter},
+    time::Duration,
+};
+use tracing::{field::display, Level};
 use url::Url;
 
 mod parsers;
@@ -12,7 +15,7 @@ pub fn parse() -> Args {
 }
 
 /// Populate your Lemmy instance's All feed with communities and posts
-#[derive(Debug, Parser)]
+#[derive(Parser)]
 #[command(author, version, about)]
 pub struct Args {
     /// The URL of the instance's API
@@ -111,4 +114,37 @@ pub struct Args {
     /// Filter input format: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives
     #[arg(long, env = "LOG_TARGETS")]
     pub log_targets: Option<String>,
+}
+
+impl fmt::Debug for Args {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Args")
+            .field("url", &display(&self.url))
+            .field("username", &self.username)
+            .field("password", &"**********")
+            .field("peers", &self.peers)
+            .field("ignored", &self.ignored)
+            .field("post_count", &self.post_count)
+            .field("community_count", &self.community_count)
+            .field("sort_methods", &self.sort_methods)
+            .field("community_add_delay", &self.community_add_delay)
+            .field("run_interval", &self.run_interval)
+            .field("log_level", &display(self.log_level))
+            .field("log_targets", &UnwrappedOption(self.log_targets.as_deref()))
+            .finish()
+    }
+}
+
+struct UnwrappedOption<T: fmt::Debug>(Option<T>);
+
+impl<T> fmt::Debug for UnwrappedOption<T>
+where
+    T: fmt::Debug,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match &self.0 {
+            Some(v) => v.fmt(f),
+            None => write!(f, "None"),
+        }
+    }
 }
