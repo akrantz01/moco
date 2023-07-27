@@ -29,18 +29,21 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - if: matrix.target != 'gnu'
+        run: echo 'SUFFIX=-${{ matrix.target }}' >> "$GITHUB_ENV"
+
       - uses: docker/metadata-action@v4
         id: meta
         with:
           images: ghcr.io/${{ github.repository_owner }}/moco
           tags: |
-            type=raw,value=latest,suffix=-${{ matrix.target }},enable={{is_default_branch}}
-            type=ref,event=pr,suffix=-${{ matrix.target }}
-            type=ref,event=branch,suffix=-${{ matrix.target }}
-            type=semver,pattern={{version}},suffix=-${{ matrix.target }}
-            type=semver,pattern={{major}}.{{minor}},suffix=-${{ matrix.target }}
-            type=semver,pattern={{major}},suffix=-${{ matrix.target }}
-            type=sha,suffix=-${{ matrix.target }}
+            type=raw,value=latest,suffix=${{ env.SUFFIX }},enable={{is_default_branch}}
+            type=ref,event=pr,suffix=${{ env.SUFFIX }}
+            type=ref,event=branch,suffix=${{ env.SUFFIX }}
+            type=semver,pattern={{version}},suffix=${{ env.SUFFIX }}
+            type=semver,pattern={{major}}.{{minor}},suffix=${{ env.SUFFIX }}
+            type=semver,pattern={{major}},suffix=${{ env.SUFFIX }}
+            type=sha,suffix=${{ env.SUFFIX }}
 
       - uses: docker/build-push-action@v4
         with:
