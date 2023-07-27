@@ -54,3 +54,25 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=buildkit-${{ matrix.target }}
           cache-to: type=gha,mode=max,scope=buildkit-${{ matrix.target }}
+
+  binary:
+    name: Binary
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - x86_64-unknown-linux-gnu
+          - x86_64-unknown-linux-musl
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - run: cargo install cross --locked
+      - run: cross build --target ${{ matrix.target }} --release
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: moco-${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/moco
