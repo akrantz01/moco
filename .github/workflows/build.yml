@@ -10,6 +10,12 @@ jobs:
   docker:
     name: Docker
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - gnu
+          - musl
     permissions:
       packages: write
       contents: read
@@ -28,20 +34,20 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository_owner }}/moco
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=ref,event=pr
-            type=ref,event=branch
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=sha
+            type=raw,value=latest,suffix=-${{ matrix.target }},enable={{is_default_branch}}
+            type=ref,event=pr,suffix=-${{ matrix.target }}
+            type=ref,event=branch,suffix=-${{ matrix.target }}
+            type=semver,pattern={{version}},suffix=-${{ matrix.target }}
+            type=semver,pattern={{major}}.{{minor}},suffix=-${{ matrix.target }}
+            type=semver,pattern={{major}},suffix=-${{ matrix.target }}
+            type=sha,suffix=-${{ matrix.target }}
 
       - uses: docker/build-push-action@v4
         with:
-          file: Dockerfile
+          file: Dockerfile.${{ matrix.target }}
           context: .
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=buildkit-${{ matrix.target }}
+          cache-to: type=gha,mode=max,scope=buildkit-${{ matrix.target }}

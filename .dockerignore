@@ -1,4 +1,4 @@
 target/
 .env
-Dockerfile
+Dockerfile.gnu
 Dockerfile.musl
