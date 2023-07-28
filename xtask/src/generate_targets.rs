@@ -1,7 +1,12 @@
 use crate::util;
 use eyre::{eyre, WrapErr};
 use serde::{Deserialize, Serialize};
-use std::fs;
+use std::{
+    env,
+    fs::{self, OpenOptions},
+    io::{self, Write},
+    path::Path,
+};
 
 pub fn run() -> eyre::Result<()> {
     let targets = load_targets().wrap_err("failed to load targets")?;
@@ -11,7 +16,7 @@ pub fn run() -> eyre::Result<()> {
         .map(|g| &g.targets)
         .flatten()
         .collect::<Vec<_>>();
-    set_output("targets", all);
+    set_output("targets", all)?;
 
     let grouped = targets
         .iter()
@@ -21,14 +26,19 @@ pub fn run() -> eyre::Result<()> {
             suffix: g.suffix.as_deref(),
         })
         .collect::<Vec<_>>();
-    set_output("matrix", grouped);
+    set_output("matrix", grouped)?;
 
     Ok(())
 }
 
-fn set_output<S: Serialize>(name: &str, value: S) {
+fn set_output<S: Serialize>(name: &str, value: S) -> io::Result<()> {
+    let Ok(output_path) = env::var("GITHUB_OUTPUT") else { return Ok(()) };
+    let output_path = Path::new(&output_path);
+
+    let mut output = OpenOptions::new().append(true).open(output_path)?;
+
     let serialized = serde_json::to_string(&value).expect("must serialize");
-    println!("::set-output name={name}::{serialized}");
+    writeln!(output, "{name}={serialized}")
 }
 
 fn load_targets() -> eyre::Result<Vec<Group>> {
