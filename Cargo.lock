@@ -1463,6 +1463,7 @@ dependencies = [
  "eyre",
  "itertools",
  "once_cell",
+ "owo-colors",
  "serde",
  "serde_json",
 ]

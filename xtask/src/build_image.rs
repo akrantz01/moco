@@ -2,6 +2,7 @@ use crate::util;
 use clap::{builder::PossibleValuesParser, Parser};
 use eyre::{eyre, WrapErr};
 use itertools::Itertools;
+use owo_colors::OwoColorize;
 use serde::Deserialize;
 use std::{collections::HashMap, iter, process::Command};
 
@@ -60,15 +61,32 @@ pub fn run(
 
     let (tags, labels) = construct_tags_and_labels(tags, labels, docker_metadata)?;
 
+    println!("{} creating manifest", "INFO".on_bright_cyan());
     exec(buildah().arg("manifest").arg("create").arg(&manifest))
         .wrap_err("failed to create manifest")?;
 
     for target in targets {
-        build_for_target(&target, &binary_path, &manifest, &labels)
+        println!(
+            "{} building image for {}",
+            "INFO".on_bright_cyan(),
+            target.bold()
+        );
+        let id = build_for_target(&target, &binary_path, &manifest, &labels)
             .wrap_err_with(|| format!("failed to build image for {target}"))?;
+        println!(
+            "{} built image with ID {} for {}",
+            "INFO".on_bright_cyan(),
+            id.underline(),
+            target.bold(),
+        );
     }
 
     for tag in tags {
+        println!(
+            "{} pushing manifest for {}",
+            "INFO".on_bright_cyan(),
+            tag.bold()
+        );
         exec(
             buildah()
                 .arg("manifest")
@@ -151,7 +169,6 @@ fn build_for_target(
             .arg(&container),
     )
     .wrap_err("failed to commit image")?;
-    println!("built image with {image} for {target}");
 
     Ok(image)
 }
