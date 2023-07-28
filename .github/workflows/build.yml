@@ -58,7 +58,6 @@ jobs:
         env:
           BINARY: target/x86_64-unknown-linux-gnu/release/moco
           BASE_IMAGE: docker.io/library/debian:bookworm-slim
-          IMAGE_NAME: ghcr.io/${{ github.repository }}
           LABELS: ${{ steps.meta.outputs.labels }}
           TAGS: ${{ steps.meta.outputs.tags }}
           PLATFORM: linux/amd64
