@@ -17,9 +17,6 @@ pub struct Args {
     /// `./target/{{target}}/release/moco` could be used for building the locally.
     #[arg(long, env = "BINARY_PATH")]
     binary_path: String,
-    /// The base image to use as the runtime image
-    #[arg(long, env = "BASE_IMAGE")]
-    base_image: String,
     /// A list of targets to build the multi-platform image for
     #[arg(long = "target", env = "TARGETS", value_delimiter = ',')]
     targets: Vec<String>,
@@ -53,7 +50,6 @@ pub struct Args {
 pub fn run(
     Args {
         binary_path,
-        base_image,
         targets,
         manifest,
         transport,
@@ -72,7 +68,7 @@ pub fn run(
         .wrap_err("failed to create manifest")?;
 
     for target in targets {
-        build_for_target(&target, &base_image, &binary_path, &manifest, &labels)
+        build_for_target(&target, &binary_path, &manifest, &labels)
             .wrap_err_with(|| format!("failed to build image for {target}"))?;
     }
 
@@ -92,14 +88,16 @@ pub fn run(
 
 fn build_for_target(
     target: &str,
-    base_image: &str,
     binary_path: &str,
     manifest: &str,
     labels: &[String],
 ) -> eyre::Result<String> {
+    let base_image = base_image_for_target(target)
+        .ok_or_else(|| eyre!("could not determine base image for platform"))?;
     let platform = platform_for_target(target).ok_or_else(|| {
         eyre!("unknown platform. if this is a new target, add it to `platform_to_target`")
     })?;
+
     let container = exec(
         buildah()
             .arg("--platform")
@@ -185,6 +183,16 @@ fn exec(command: &mut Command) -> eyre::Result<String> {
             "command exited with non-zero status ({})",
             output.status
         ))
+    }
+}
+
+fn base_image_for_target(target: &str) -> Option<&'static str> {
+    if target.contains("gnu") {
+        Some("docker.io/library/debian:bookworm-slim")
+    } else if target.contains("musl") {
+        Some("scratch")
+    } else {
+        None
     }
 }
 
