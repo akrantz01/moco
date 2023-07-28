@@ -59,17 +59,18 @@ jobs:
     permissions:
       packages: write
       contents: read
-    env:
-      MANIFEST: ${{ github.repository_owner }}/moco:${{ github.sha }}
     steps:
       - uses: actions/checkout@v3
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: v0-rust-xtask
 
       - uses: actions/download-artifact@v3
         with:
           name: moco
           path: /tmp/artifacts
-
-      - run: ls -la /tmp/artifacts
 
       - uses: redhat-actions/podman-login@v1
         with:
@@ -90,14 +91,12 @@ jobs:
             type=semver,pattern={{major}},suffix=${{ env.SUFFIX }}
             type=sha,suffix=${{ env.SUFFIX }}
 
-      - run: buildah manifest create $MANIFEST
-
-      - run: ./scripts/build-image.sh
+      - run: cargo xtask build-image
         env:
-          BINARY: /tmp/artifacts/moco-x86_64-unknown-linux-gnu
+          # TODO: pull these from a build matrix
           BASE_IMAGE: docker.io/library/debian:bookworm-slim
-          LABELS: ${{ steps.meta.outputs.labels }}
-          TAGS: ${{ steps.meta.outputs.tags }}
-          PLATFORM: linux/amd64
+          TARGETS: x86_64-unknown-linux-gnu,aarch64-unknown-linux-gnu,armv7-unknown-linux-gnueabihf
 
-      - run: buildah manifest inspect $MANIFEST
+          BINARY_PATH: /tmp/artifacts/moco-{{target}}
+          MANIFEST: ${{ github.repository_owner }}/moco:${{ github.sha }}
+          TRANSPORT: docker
