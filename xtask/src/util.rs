@@ -9,6 +9,7 @@ use std::{
 static METADATA: OnceCell<CargoMetadata> = OnceCell::new();
 
 #[derive(Debug, Deserialize)]
+#[allow(unused)]
 struct CargoMetadata {
     workspace_root: PathBuf,
     target_directory: PathBuf,
