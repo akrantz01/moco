@@ -1462,6 +1462,7 @@ dependencies = [
  "dotenvy",
  "eyre",
  "itertools",
+ "once_cell",
  "serde",
  "serde_json",
 ]

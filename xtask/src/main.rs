@@ -2,6 +2,8 @@ use clap::Parser;
 use eyre::WrapErr;
 
 mod build_image;
+mod generate_targets;
+mod util;
 
 fn main() -> eyre::Result<()> {
     color_eyre::install()?;
@@ -14,6 +16,7 @@ fn main() -> eyre::Result<()> {
 
     match Command::parse() {
         Command::BuildImage(args) => build_image::run(args),
+        Command::GenerateTargets => generate_targets::run(),
     }
 }
 
@@ -23,4 +26,6 @@ fn main() -> eyre::Result<()> {
 enum Command {
     /// Build the container image
     BuildImage(build_image::Args),
+    /// Generate the build matrix for CI jobs
+    GenerateTargets,
 }
