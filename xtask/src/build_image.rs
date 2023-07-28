@@ -1,13 +1,9 @@
+use crate::util;
 use clap::{builder::PossibleValuesParser, Parser};
 use eyre::{eyre, WrapErr};
 use itertools::Itertools;
 use serde::Deserialize;
-use std::{
-    collections::HashMap,
-    io::{self, Write},
-    iter,
-    process::{Command, Stdio},
-};
+use std::{collections::HashMap, iter, process::Command};
 
 #[derive(Debug, Parser)]
 pub struct Args {
@@ -165,25 +161,8 @@ fn buildah() -> Command {
 }
 
 fn exec(command: &mut Command) -> eyre::Result<String> {
-    println!("[COMMAND]: {command:?}");
-    let output = command
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::inherit())
-        .output()
-        .wrap_err("failed to execute command")?;
-
-    io::stdout().write_all(&output.stdout)?;
-
-    if output.status.success() {
-        let stdout = String::from_utf8(output.stdout)?.trim().to_owned();
-        Ok(stdout)
-    } else {
-        Err(eyre!(
-            "command exited with non-zero status ({})",
-            output.status
-        ))
-    }
+    let output = util::exec(command)?;
+    Ok(String::from_utf8(output)?.trim().to_owned())
 }
 
 fn base_image_for_target(target: &str) -> Option<&'static str> {
