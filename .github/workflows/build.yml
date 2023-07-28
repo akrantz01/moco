@@ -94,8 +94,9 @@ jobs:
 
       - run: cargo install cross --locked
       - run: cross build --target ${{ matrix.target }} --release
+      - run: mv target/${{ matrix.target }}/release/moco target/${{ matrix.target }}/release/moco-${{ matrix.target }}
 
       - uses: actions/upload-artifact@v3
         with:
-          name: moco-${{ matrix.target }}
-          path: target/${{ matrix.target }}/release/moco
+          name: moco
+          path: target/${{ matrix.target }}/release/moco-*
