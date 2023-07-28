@@ -61,11 +61,7 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v3
-
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          prefix-key: v0-rust-xtask
+      - uses: ./.github/actions/setup-xtask
 
       - uses: actions/download-artifact@v3
         with:

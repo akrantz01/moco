@@ -1,0 +1,14 @@
+name: Setup xtask
+description: Pre-compile xtasks so they can be run later
+
+runs:
+  using: composite
+  steps:
+    - uses: dtolnay/rust-toolchain@stable
+    - uses: Swatinem/rust-cache@v2
+      with:
+        prefix-key: v0-rust-setup-xtask
+
+    - name: Compile xtask
+      run: cargo build --release --package xtask
+      shell: bash
