@@ -20,20 +20,29 @@ jobs:
 
       - run: cargo check --all
 
+  generate-targets:
+    name: Generate Targets
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.task.outputs.matrix }}
+      targets: ${{ steps.task.outputs.targets }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup-xtask
+
+      - run: cargo xtask generate-targets
+        id: task
+
   binary:
     name: Binary
     runs-on: ubuntu-latest
     needs:
       - check
+      - generate-targets
     strategy:
       fail-fast: false
       matrix:
-        target:
-          - x86_64-unknown-linux-gnu
-          - x86_64-unknown-linux-musl
-          - aarch64-unknown-linux-gnu
-          - aarch64-unknown-linux-musl
-          - armv7-unknown-linux-gnueabihf
+        target: ${{ fromJson(needs.generate-targets.outputs.targets) }}
     steps:
       - uses: actions/checkout@v3
 
@@ -52,10 +61,15 @@ jobs:
           path: target/${{ matrix.target }}/release/moco-*
 
   docker:
-    name: Docker
+    name: Docker (${{ matrix.name }})
     runs-on: ubuntu-latest
     needs:
       - binary
+      - generate-targets
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.generate-targets.outputs.matrix) }}
     permissions:
       packages: write
       contents: read
