@@ -11,5 +11,5 @@ runs:
         prefix-key: v0-rust-setup-xtask
 
     - name: Compile xtask
-      run: cargo build --release --package xtask
+      run: cargo build --package xtask
       shell: bash
