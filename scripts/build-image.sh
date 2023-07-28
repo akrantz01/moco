@@ -43,13 +43,14 @@ set -o xtrace
 container=$(buildah from --platform $PLATFORM $BASE_IMAGE)
 
 buildah config --cmd '[]' --entrypoint '[ "/moco" ]' $container
-buildah config $(printf "--label '%s' " "${LABELS[@]}")
+buildah config $(printf -- "--label '%s' " "${LABELS[@]}")
 buildah copy $container $BINARY /moco
 
 image_id=$(buildah commit --rm --manifest $MANIFEST $container)
 buildah tag $image_id "${TAGS[@]}"
 
 buildah images
+buildah inspect $image_id
 buildah manifest inspect $MANIFEST
 
 buildah rmi -f $image_id
