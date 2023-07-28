@@ -40,6 +40,9 @@ set -o nounset
 set -o pipefail
 set -o xtrace
 
+IFS=' ' read -r -a LABELS <<< "$LABELS"
+IFS=' ' read -r -a TAGS <<< "$TAGS"
+
 container=$(buildah from --platform $PLATFORM $BASE_IMAGE)
 
 buildah config --cmd '[]' --entrypoint '[ "/moco" ]' $container
