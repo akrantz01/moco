@@ -20,50 +20,6 @@ jobs:
 
       - run: cargo check
 
-  docker:
-    name: Docker
-    runs-on: ubuntu-latest
-    needs:
-      - check
-    permissions:
-      packages: write
-      contents: read
-    env:
-      MANIFEST: ${{ github.repository_owner }}/moco:${{ github.sha }}
-    steps:
-      - uses: actions/checkout@v3
-
-      - uses: redhat-actions/podman-login@v1
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - uses: docker/metadata-action@v4
-        id: meta
-        with:
-          images: ghcr.io/${{ github.repository_owner }}/moco
-          tags: |
-            type=raw,value=latest,suffix=${{ env.SUFFIX }},enable={{is_default_branch}}
-            type=ref,event=pr,suffix=${{ env.SUFFIX }}
-            type=ref,event=branch,suffix=${{ env.SUFFIX }}
-            type=semver,pattern={{version}},suffix=${{ env.SUFFIX }}
-            type=semver,pattern={{major}}.{{minor}},suffix=${{ env.SUFFIX }}
-            type=semver,pattern={{major}},suffix=${{ env.SUFFIX }}
-            type=sha,suffix=${{ env.SUFFIX }}
-
-      - run: buildah manifest create $MANIFEST
-
-      - run: ./scripts/build-image.sh
-        env:
-          BINARY: target/x86_64-unknown-linux-gnu/release/moco
-          BASE_IMAGE: docker.io/library/debian:bookworm-slim
-          LABELS: ${{ steps.meta.outputs.labels }}
-          TAGS: ${{ steps.meta.outputs.tags }}
-          PLATFORM: linux/amd64
-
-      - run: buildah manifest inspect $MANIFEST
-
   binary:
     name: Binary
     runs-on: ubuntu-latest
@@ -94,3 +50,54 @@ jobs:
         with:
           name: moco
           path: target/${{ matrix.target }}/release/moco-*
+
+  docker:
+    name: Docker
+    runs-on: ubuntu-latest
+    needs:
+      - binary
+    permissions:
+      packages: write
+      contents: read
+    env:
+      MANIFEST: ${{ github.repository_owner }}/moco:${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/download-artifact@v3
+        with:
+          name: moco
+          path: /tmp/artifacts
+
+      - run: ls -la /tmp/artifacts
+
+      - uses: redhat-actions/podman-login@v1
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/metadata-action@v4
+        id: meta
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/moco
+          tags: |
+            type=raw,value=latest,suffix=${{ env.SUFFIX }},enable={{is_default_branch}}
+            type=ref,event=pr,suffix=${{ env.SUFFIX }}
+            type=ref,event=branch,suffix=${{ env.SUFFIX }}
+            type=semver,pattern={{version}},suffix=${{ env.SUFFIX }}
+            type=semver,pattern={{major}}.{{minor}},suffix=${{ env.SUFFIX }}
+            type=semver,pattern={{major}},suffix=${{ env.SUFFIX }}
+            type=sha,suffix=${{ env.SUFFIX }}
+
+      - run: buildah manifest create $MANIFEST
+
+      - run: ./scripts/build-image.sh
+        env:
+          BINARY: /tmp/artifacts/moco-x86_64-unknown-linux-gnu
+          BASE_IMAGE: docker.io/library/debian:bookworm-slim
+          LABELS: ${{ steps.meta.outputs.labels }}
+          TAGS: ${{ steps.meta.outputs.tags }}
+          PLATFORM: linux/amd64
+
+      - run: buildah manifest inspect $MANIFEST
