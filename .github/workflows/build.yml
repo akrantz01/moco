@@ -28,6 +28,8 @@ jobs:
     permissions:
       packages: write
       contents: read
+    env:
+      MANIFEST: ${{ github.repository_owner }}/moco:${{ github.sha }}
     steps:
       - uses: actions/checkout@v3
 
@@ -37,15 +39,31 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Update podman and buildah
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y buildah podman
+      - uses: docker/metadata-action@v4
+        id: meta
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/moco
+          tags: |
+            type=raw,value=latest,suffix=${{ env.SUFFIX }},enable={{is_default_branch}}
+            type=ref,event=pr,suffix=${{ env.SUFFIX }}
+            type=ref,event=branch,suffix=${{ env.SUFFIX }}
+            type=semver,pattern={{version}},suffix=${{ env.SUFFIX }}
+            type=semver,pattern={{major}}.{{minor}},suffix=${{ env.SUFFIX }}
+            type=semver,pattern={{major}},suffix=${{ env.SUFFIX }}
+            type=sha,suffix=${{ env.SUFFIX }}
 
-      - run: podman version
-        continue-on-error: true
-      - run: buildah version
-        continue-on-error: true
+      - run: buildah manifest create $MANIFEST
+
+      - run: ./scripts/build-image.sh
+        env:
+          BINARY: target/x86_64-unknown-linux-gnu/release/moco
+          BASE_IMAGE: docker.io/library/debian:bookworm-slim
+          IMAGE_NAME: ghcr.io/${{ github.repository }}
+          LABELS: ${{ steps.meta.outputs.labels }}
+          TAGS: ${{ steps.meta.outputs.tags }}
+          PLATFORM: linux/amd64
+
+      - run: buildah manifest inspect $MANIFEST
 
   binary:
     name: Binary
