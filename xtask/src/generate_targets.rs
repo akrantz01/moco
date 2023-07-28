@@ -11,11 +11,7 @@ use std::{
 pub fn run() -> eyre::Result<()> {
     let targets = load_targets().wrap_err("failed to load targets")?;
 
-    let all = targets
-        .iter()
-        .map(|g| &g.targets)
-        .flatten()
-        .collect::<Vec<_>>();
+    let all = targets.iter().flat_map(|g| &g.targets).collect::<Vec<_>>();
     set_output("targets", all)?;
 
     let grouped = targets
