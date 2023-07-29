@@ -60,6 +60,11 @@ pub fn run(
     }
 
     let (tags, labels) = construct_tags_and_labels(tags, labels, docker_metadata)?;
+    let registry = {
+        let tag = tags.first().expect("tags must not be empty");
+        let at = tag.find(':');
+        at.map(|at| tag.split_at(at).0).unwrap_or(tag)
+    };
 
     println!("{} creating manifest", "INFO".on_bright_cyan());
     exec(buildah().arg("manifest").arg("create").arg(&manifest))
@@ -73,12 +78,19 @@ pub fn run(
         );
         let id = build_for_target(&target, &binary_path, &manifest, &labels)
             .wrap_err_with(|| format!("failed to build image for {target}"))?;
+
         println!(
-            "{} built image with ID {} for {}",
+            "{} pushing image for {} to the registry",
             "INFO".on_bright_cyan(),
-            id.underline(),
-            target.bold(),
+            target.bold()
         );
+        exec(
+            buildah()
+                .arg("push")
+                .arg(&id)
+                .arg(format!("{transport}://{registry}@sha256:{id}")),
+        )
+        .wrap_err("failed to push image")?;
     }
 
     for tag in tags {
